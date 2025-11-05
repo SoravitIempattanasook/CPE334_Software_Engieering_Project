@@ -74,3 +74,69 @@ html, body, #root {
   width: 100%;
   height: 100%;
 }
+
+/* cursor utilities */
+.cursor-pointer   { cursor: pointer; }      /* ใช้กับกล่อง/การ์ดที่กดได้ */
+.cursor-not-allowed { cursor: not-allowed; }/* ใช้กับสถานะ Disabled */
+.cursor-grab      { cursor: grab; }         /* ใช้กับกล่องที่ลากได้ */
+.cursor-grabbing  { cursor: grabbing; }     /* ใช้ตอนกำลังลากอยู่ */
+.cursor-text      { cursor: text; }         /* ใช้กับพื้นที่พิมพ์/เลือกข้อความ */
+.cursor-ew-resize { cursor: ew-resize; }    /* ปรับขนาดแนวนอน */
+.cursor-ns-resize { cursor: ns-resize; }    /* ปรับขนาดแนวตั้ง */
+
+/* ตัวอย่างการ์ดที่ hover แล้วเป็นปุ่ม */
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.card:hover {
+  cursor: pointer;
+  border-color: #c7d2fe;
+  box-shadow: 0 8px 24px rgba(0,0,0,.06);
+  transform: translateY(-2px);
+}
+
+/* Tooltip เล็ก ๆ ชี้ไปที่กล่องข้อความ */
+.tooltip {
+  position: absolute;
+  z-index: 20;
+  max-width: 260px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  color: #7f1d1d;
+  background: #ffe4e6;         /* ชมพูอ่อน */
+  border: 1px solid #fecdd3;   /* ขอบชมพูเข้มกว่า */
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+}
+
+/* วางไว้ด้านบนซ้ายของ input */
+.tooltip-top-left {
+  bottom: calc(100% + 8px);
+  left: 0;
+}
+
+/* หัวลูกศร */
+.tooltip-top-left::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 16px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: #fecdd3 transparent transparent transparent; /* เส้นนอก */
+}
+
+/* เติมสีพื้นให้หัวลูกศร (ซ้อนอีกชั้น) */
+.tooltip-top-left::before {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 16px;
+  transform: translateY(-1px);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #ffe4e6 transparent transparent transparent; /* สีพื้น */
+}

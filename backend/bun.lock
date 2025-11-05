@@ -4,8 +4,8 @@
     "": {
       "name": "backend",
       "dependencies": {
-        "@elysiajs/cors": "^1.4.0",
-        "@elysiajs/jwt": "^1.4.0",
+        "@elysiajs/cors": "^1.0.2",
+        "@elysiajs/jwt": "^1.0.2",
         "elysia": "latest",
       },
       "devDependencies": {
