@@ -15,8 +15,13 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+
+          {/* หน้า Login ไม่ต้องมี Layout */}
           <Route path="/login" element={<Login />} />
+
+          {/* ทุกหน้าภายในนี้มี Sidebar & Protected แล้ว */}
           <Route
+          path="/"
             element={
               <ProtectedRoute>
                 <Layout />
@@ -24,14 +29,16 @@ function App() {
             }
           >
             <Route index element={<Dashboard />} />
-            <Route path="/activity" element={<ActivityBoard />} />
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="activity" element={<ActivityBoard />} />
+            <Route path="calendar" element={<CalendarPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
           </Route>
+
         </Routes>
       </AuthProvider>
     </BrowserRouter>
   );
 }
+
 export default App;

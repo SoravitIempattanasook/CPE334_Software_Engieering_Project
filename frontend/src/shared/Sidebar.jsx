@@ -1,42 +1,63 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LuCalendar, LuLayoutGrid, LuUserCog, LuUser, LuLogOut } from "react-icons/lu";
+import { LuCalendar, LuLayoutGrid, LuSettings, LuLogOut } from "react-icons/lu";
+import { useAuth } from "../context/AuthContext";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const { user, displayName } = useAuth();
 
-  const handleLogout = () => {
-    // TODO: ดึง logout() จาก context ถ้ามี แล้วค่อย navigate("/login")
-    // logout();
-    navigate("/login");
+  const avatar =
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture ||
+    "/avatar.png";
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
   };
 
   return (
     <aside className="side">
-      <div className="brand">Menu<br/><span className="brand-sub">KMUTT SC</span></div>
+      <div
+      className="brand cursor-pointer"
+      onClick={() => navigate("/")}
+      style={{ userSelect: "none" }}
+    >
+      MODSC
+      <div className="brand-sub">Student Companion</div>
+    </div>
+
 
       <nav className="nav">
         <NavLink to="/" end className="item">
-          <LuLayoutGrid className="ic" /> <span>Dashboard</span>
+          <LuLayoutGrid className="ic" /> Dashboard
         </NavLink>
+
         <NavLink to="/activity" className="item">
-          <LuLayoutGrid className="ic" /> <span>Activity board</span>
+          <LuLayoutGrid className="ic" /> Activity Board
         </NavLink>
+
         <NavLink to="/calendar" className="item">
-          <LuCalendar className="ic" /> <span>Calendar</span>
+          <LuCalendar className="ic" /> Calendar
         </NavLink>
+
         <NavLink to="/settings" className="item">
-          <LuUserCog className="ic" /> <span>Setting</span>
+          <LuSettings className="ic" /> Settings
         </NavLink>
-        <NavLink to="/profile" className="item">
-          <LuUser className="ic" /> <span>Profile</span>
-        </NavLink>
+
+        {/* ✅ ลบปุ่ม Profile ออกจากเมนู */}
       </nav>
 
       <div className="side-footer">
-        {/* แสดงผู้ใช้ปัจจุบัน */}
-        <div className="me-card">
-          <img className="me-avatar" src="/avatar.png" alt="me" />
-          <div className="me-name">Among U.<span className="star">★</span></div>
+
+        {/* ✅ ทำ me-card คลิกได้ → ไปหน้า Profile */}
+        <div
+          className="me-card cursor-pointer"
+          onClick={() => navigate("/profile")}
+        >
+          <img src={avatar} className="me-avatar" alt="user avatar" />
+          <div className="me-name">{displayName || "User"}</div>
         </div>
 
         <button className="logout" onClick={handleLogout}>

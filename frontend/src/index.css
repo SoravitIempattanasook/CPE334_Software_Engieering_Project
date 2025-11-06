@@ -126,3 +126,23 @@ html, body, #root {
 .field:last-child { border-bottom:none; }
 .field label { font-weight:700; font-size:18px; }
 .field .value { font-size:22px; }
+
+.me-card {
+  transition: background .15s ease, transform .15s ease;
+}
+
+.me-card:hover {
+  background: #f4f4f4;
+  transform: translateY(-2px);
+  cursor: pointer;
+}
+
+.brand {
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.brand:hover {
+  opacity: 0.75;
+  transform: translateY(-1px);
+  cursor: pointer;
+}
