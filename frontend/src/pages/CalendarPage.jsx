@@ -1,35 +1,93 @@
-import { useMemo } from "react";
-
-function buildDays() {
-  // สร้าง grid 7x5-6 อย่างง่าย (เดือนสมมติ)
-  const days = [];
-  for (let i = 1; i <= 30; i++) days.push(i);
-  return days;
-}
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { useAuth } from "../context/AuthContext";
 
 export default function CalendarPage() {
-  const days = useMemo(buildDays, []);
+  const { user } = useAuth();
+
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState([]);
+
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("personal_events")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("date", { ascending: true });
+    if (!error) setItems(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const addEvent = async () => {
+    const title = prompt("ชื่อกิจกรรม:");
+    if (!title) return;
+    const details = prompt("รายละเอียด (ใส่ก็ได้):") || null;
+    const date = prompt("วันเวลา (ISO เช่น 2025-11-06T10:00:00+07:00):");
+    if (!date) return;
+
+    const { error } = await supabase.from("personal_events").insert({
+      user_id: user.id,
+      title,
+      details,
+      date,
+    });
+    if (error) alert(error.message);
+    await load();
+  };
+
+  const editEvent = async (ev) => {
+    const title = prompt("ชื่อกิจกรรม:", ev.title);
+    if (!title) return;
+    const details = prompt("รายละเอียด:", ev.details || "") || null;
+    const date = prompt("วันเวลา (ISO):", ev.date);
+    if (!date) return;
+
+    const { error } = await supabase
+      .from("personal_events")
+      .update({ title, details, date })
+      .eq("id", ev.id)
+      .eq("user_id", user.id); // กันแก้ของคนอื่น
+    if (error) alert(error.message);
+    await load();
+  };
+
+  const deleteEvent = async (ev) => {
+    if (!confirm(`ลบกิจกรรม "${ev.title}" ?`)) return;
+    const { error } = await supabase
+      .from("personal_events")
+      .delete()
+      .eq("id", ev.id)
+      .eq("user_id", user.id);
+    if (error) alert(error.message);
+    await load();
+  };
+
   return (
     <section className="page">
-      <h1 className="page-title">Calendar</h1>
+      <h1 className="page-title">My Calendar</h1>
 
-      <div className="cal-grid">
-        {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(h => (
-          <div key={h} className="cal-head">{h}</div>
-        ))}
-        {days.map(d => (
-          <div key={d} className="cal-cell">
-            <div className="cal-day">{d}</div>
-            {/* จุดสำหรับ badge event */}
-          </div>
-        ))}
-      </div>
+      <button className="chip mt" onClick={addEvent}>+ เพิ่มกิจกรรมส่วนตัว</button>
 
-      <h3 className="mt">Upcoming Events</h3>
-      <ul className="list">
-        <li><b>SC Volunteer</b> — 10:00–12:00 @ A Building</li>
-        <li><b>Meeting Freshy Day</b> — 14:00–15:00 @ Discord</li>
-      </ul>
+      {loading ? (
+        <p className="mt">กำลังโหลด...</p>
+      ) : (
+        <div className="card-list mt">
+          {items.map((ev) => (
+            <div className="card" key={ev.id}>
+              <div className="card-title">{ev.title}</div>
+              <div className="muted">{new Date(ev.date).toLocaleString()}</div>
+              {ev.details && <div className="mt">{ev.details}</div>}
+              <div className="mt">
+                <button className="chip" onClick={() => editEvent(ev)}>แก้ไข</button>
+                <button className="chip" onClick={() => deleteEvent(ev)}>ลบ</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

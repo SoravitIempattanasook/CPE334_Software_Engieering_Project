@@ -2,37 +2,19 @@ import { useAuth } from "../context/AuthContext";
 
 export default function ProfilePage() {
   const { user, displayName, domain, role, studentYear } = useAuth();
+  if (!user) return null;
 
-  if (!user) return null; // เผื่อ State ยังโหลด (จริง ๆ AuthProvider กันไว้แล้ว)
-
-  // ✅ ดึงข้อมูลจาก user_metadata (Supabase)
-  const metadata = user.user_metadata || {};
-
-  const avatar =
-    metadata.avatar_url ||
-    metadata.picture ||
-    "/avatar.png";
-
-  const name =
-    metadata.full_name ||
-    metadata.name ||
-    displayName ||
-    (user.email ? user.email.split("@")[0] : "");
-
-  const handle = metadata.username
-    ? `@${metadata.username}`
-    : `@${user.email.split("@")[0]}`;
-
-  const phone = metadata.phone || "-";
-
-  const email = user.email;
+  const md = user.user_metadata || {};
+  const avatar = md.avatar_url || md.picture || "/avatar.png";
+  const name = md.full_name || md.name || displayName || (user.email || "").split("@")[0];
+  const handle = md.username ? `@${md.username}` : `@${(user.email || "").split("@")[0]}`;
+  const phone = md.phone || "-";
 
   return (
     <section className="page">
       <h1 className="page-title">My Profile</h1>
 
       <div className="profile-card">
-        {/* ส่วนบน */}
         <div className="profile-top">
           <img className="profile-avatar" src={avatar} alt="avatar" />
           <div className="profile-id">
@@ -43,39 +25,17 @@ export default function ProfilePage() {
 
         <div className="divider" />
 
-        {/* รายละเอียด */}
-        <div className="field">
-          <label>Name</label>
-          <div className="value">{name}</div>
-        </div>
-
-        <div className="field">
-          <label>Email</label>
-          <div className="value">{email}</div>
-        </div>
-
-        <div className="field">
-          <label>Domain</label>
-          <div className="value">{domain}</div>
-        </div>
-
+        <div className="field"><label>Name</label><div className="value">{name}</div></div>
+        <div className="field"><label>Email</label><div className="value">{user.email}</div></div>
+        <div className="field"><label>Domain</label><div className="value">{domain || "-"}</div></div>
         <div className="field">
           <label>Role</label>
           <div className="value" style={{ textTransform: "capitalize" }}>
-            {role}
-            {studentYear ? ` (${studentYear})` : ""}
+            {role}{studentYear ? ` (${studentYear})` : ""}
           </div>
         </div>
-
-        <div className="field">
-          <label>Phone Number</label>
-          <div className="value">{phone}</div>
-        </div>
-
-        <div className="field">
-          <label>Password</label>
-          <div className="value">********** <span className="muted">Change password</span></div>
-        </div>
+        <div className="field"><label>Phone Number</label><div className="value">{phone}</div></div>
+        <div className="field"><label>Password</label><div className="value">********** <span className="muted">Change password</span></div></div>
       </div>
     </section>
   );

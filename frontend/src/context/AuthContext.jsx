@@ -1,14 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-// ✅ export context เป็น named export ด้วย (กันสับสน)
 export const AuthContext = createContext(null);
 
-// Allowed domains
+// Allowed domains (env -> fallback)
 const envAllowed = (import.meta?.env?.VITE_ALLOWED_DOMAINS || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+  .split(",").map(s => s.trim()).filter(Boolean);
 const DEFAULT_ALLOWED = ["st.kmutt.ac.th", "kmutt.ac.th", "mail.kmutt.ac.th"];
 const ALLOWED_DOMAINS = envAllowed.length ? envAllowed : DEFAULT_ALLOWED;
 
@@ -18,23 +15,42 @@ const getDisplayName = (user) =>
   user?.user_metadata?.full_name ||
   user?.user_metadata?.name ||
   (user?.email ? user.email.split("@")[0] : "");
-const getRole = (email) => {
-  const d = getDomain(email) || "";
-  if (d === "st.kmutt.ac.th") return "student";
-  if (d.endsWith("kmutt.ac.th")) return "staff";
-  return "guest";
-};
 const getStudentYear = (email) => {
   const local = email?.split("@")[0] || "";
   const yy = local.slice(0, 2);
   return /^\d{2}$/.test(yy) ? Number(`25${yy}`) : null;
 };
 
+// 🔎 ดึง role จาก DB + metadata
+async function resolveRole(user) {
+  if (!user?.email) return "user";
+  const email = user.email;
+
+  // 1) admin? (เช็คตาราง public.admins)
+  const { data: adminRow, error: adminErr } = await supabase
+    .from("admins")
+    .select("email")
+    .eq("email", email)
+    .maybeSingle();
+  if (adminRow && !adminErr) return "admin";
+
+  // 2) activity_maker? (จาก user_metadata.role)
+  const metaRole = user.user_metadata?.role;
+  if (metaRole === "activity_maker") return "activity_maker";
+
+  // 3) student ตามโดเมน
+  if (email.endsWith("@st.kmutt.ac.th")) return "student";
+
+  // 4) fallback
+  return "user";
+}
+
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
+  const [role, setRole] = useState("user");
   const [loading, setLoading] = useState(true);
 
-  // initial load
+  // โหลด session ครั้งแรก
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -42,11 +58,13 @@ export const AuthProvider = ({ children }) => {
         const { data: sData } = await supabase.auth.getSession();
         let s = sData?.session ?? null;
 
+        // refresh user metadata
         if (s?.user) {
           const { data: uData } = await supabase.auth.getUser();
           if (uData?.user) s = { ...s, user: uData.user };
         }
 
+        // domain gate
         if (s?.user?.email) {
           const domain = getDomain(s.user.email);
           if (domain && !ALLOWED_DOMAINS.includes(domain)) {
@@ -55,7 +73,11 @@ export const AuthProvider = ({ children }) => {
           }
         }
 
-        if (mounted) setSession(s);
+        if (mounted) {
+          setSession(s);
+          const r = await resolveRole(s?.user);
+          setRole(r);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -63,7 +85,7 @@ export const AuthProvider = ({ children }) => {
     return () => { mounted = false; };
   }, []);
 
-  // listen session changes
+  // ฟังการเปลี่ยนแปลง auth
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange(async (_evt, newSession) => {
       let s = newSession ?? null;
@@ -82,6 +104,8 @@ export const AuthProvider = ({ children }) => {
       }
 
       setSession(s);
+      const r = await resolveRole(s?.user);
+      setRole(r);
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -94,10 +118,12 @@ export const AuthProvider = ({ children }) => {
       session,
       user,
       loading,
+      role, // 👈 ใช้ตรงนี้ใน Sidebar/RoleRedirect/Profile
+
       displayName: user ? getDisplayName(user) : "",
       domain: email ? getDomain(email) : null,
-      role: email ? getRole(email) : "guest",
       studentYear: email ? getStudentYear(email) : null,
+
       refreshSession: async () => {
         const { data: sData } = await supabase.auth.getSession();
         let s = sData?.session ?? null;
@@ -106,21 +132,19 @@ export const AuthProvider = ({ children }) => {
           if (uData?.user) s = { ...s, user: uData.user };
         }
         setSession(s);
+        const r = await resolveRole(s?.user);
+        setRole(r);
         return s;
       },
     };
-  }, [session, user, loading]);
+  }, [session, user, loading, role]);
 
   return (
     <AuthContext.Provider value={value}>
       {loading ? (
         <div style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          fontSize: "20px",
-          color: "#777"
+          display: "flex", justifyContent: "center", alignItems: "center",
+          height: "100vh", fontSize: 20, color: "#777"
         }}>
           Loading...
         </div>
@@ -131,5 +155,4 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// ✅ named hook export ที่ ProtectedRoute ใช้
 export const useAuth = () => useContext(AuthContext);
