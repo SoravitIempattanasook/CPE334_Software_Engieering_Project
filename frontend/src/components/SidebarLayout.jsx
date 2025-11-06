@@ -48,10 +48,10 @@ export default function SidebarLayout({ children }) {
           <h2 style={{ margin: "0 0 24px 8px" }}>Menu</h2>
 
           <NavLink to="/" style={linkBase}>🏠 Dashboard</NavLink>
-          <NavLink to="/activities" style={linkBase}>📄 Activity pools</NavLink>
+          <NavLink to="/activities" style={linkBase}>📄 Activity board</NavLink>
           {/* ❌ เอาเมนู Users ออกตามที่ขอ */}
           {/* <NavLink to="/users" style={linkBase}>👤 Users</NavLink> */}
-          <NavLink to="/database" style={linkBase}>🗄 Database</NavLink>
+          <NavLink to="/database" style={linkBase}>📅 Calendar</NavLink>
           <NavLink to="/setting" style={linkBase}>⚙️ Setting</NavLink>
 
           {/* ✅ ปุ่ม Logout ใต้ Setting */}
