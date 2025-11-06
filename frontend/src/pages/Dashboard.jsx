@@ -1,10 +1,8 @@
-import SidebarLayout from "../components/SidebarLayout";
-
 export default function Dashboard() {
   return (
-    <SidebarLayout>
-      <h1>Dashboard</h1>
+    <section className="page">
+      <h1 className="page-title">Dashboard</h1>
       <p>ยินดีต้อนรับเข้าสู่ระบบ 🙌</p>
-    </SidebarLayout>
+    </section>
   );
 }
