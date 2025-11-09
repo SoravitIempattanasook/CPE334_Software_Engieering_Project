@@ -1,8 +1,6 @@
-// frontend/src/components/SidebarLayout.jsx
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { supabase } from "../lib/supabaseClient";
-import StudentIdGate from "./StudentIdGate";
+import { useState } from "react";
 
 const linkBase = {
   display: "block",
@@ -15,19 +13,17 @@ const linkBase = {
 };
 
 export default function SidebarLayout({ children }) {
-  const { user, displayName } = useAuth();
+  const { user, displayName, role, logout } = useAuth();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
   const avatar =
     user?.user_metadata?.avatar_url ||
     "https://i.pravatar.cc/80";
 
-  const goUsers = () => navigate("/users");
-
   const handleLogout = async () => {
-    // ✅ บังคับให้หน้า Login เรียก Google แบบเลือกบัญชีใหม่
-    localStorage.setItem("forceAccountSelect", "1");
-    await supabase.auth.signOut();
+    setLoading(true);
+    await logout();
     navigate("/login", { replace: true });
   };
 
@@ -45,18 +41,16 @@ export default function SidebarLayout({ children }) {
         }}
       >
         <div>
-          <h2 style={{ margin: "0 0 24px 8px" }}>Menu</h2>
+          <h2 style={{ margin: "0 0 24px 8px" }}>Menu ({role})</h2>
 
-          <NavLink to="/" style={linkBase}>🏠 Dashboard</NavLink>
-          <NavLink to="/activities" style={linkBase}>📄 Activity board</NavLink>
-          {/* ❌ เอาเมนู Users ออกตามที่ขอ */}
-          {/* <NavLink to="/users" style={linkBase}>👤 Users</NavLink> */}
-          <NavLink to="/database" style={linkBase}>📅 Calendar</NavLink>
-          <NavLink to="/setting" style={linkBase}>⚙️ Setting</NavLink>
+          <NavLink to="/dashboard" style={linkBase}>🏠 Dashboard</NavLink>
+          <NavLink to="/activity" style={linkBase}>📄 Activity board</NavLink>
+          <NavLink to="/calendar" style={linkBase}>📅 Calendar</NavLink>
+          <NavLink to="/settings" style={linkBase}>⚙️ Settings</NavLink>
 
-          {/* ✅ ปุ่ม Logout ใต้ Setting */}
           <button
             onClick={handleLogout}
+            disabled={loading}
             style={{
               ...linkBase,
               width: "100%",
@@ -69,21 +63,15 @@ export default function SidebarLayout({ children }) {
               fontWeight: 600,
             }}
           >
-            🚪 Logout
+            🚪 {loading ? "Logging out..." : "Logout"}
           </button>
         </div>
 
-        {/* ✅ พื้นที่ผู้ใช้ด้านล่าง: กดเพื่อไปหน้า /users */}
         <div
-          role="button"
-          tabIndex={0}
-          onClick={goUsers}
-          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && goUsers()}
           style={{
             padding: "16px",
             borderTop: "1px solid #e5e7eb",
             textAlign: "center",
-            cursor: "pointer",
             borderRadius: 12,
           }}
         >
@@ -99,11 +87,10 @@ export default function SidebarLayout({ children }) {
         </div>
       </aside>
 
-      {/* Content */}
-      <main style={{ flex: 1, padding: "40px" }}>{children}</main>
-
-      {/* ✅ Gate: บังคับกรอกรหัสนักศึกษาถ้ายังไม่มี */}
-      <StudentIdGate />
+      {/* ✅ สำคัญที่สุด — ต้องมี children */}
+      <main style={{ flex: 1, padding: "40px" }}>
+        {children}
+      </main>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+<<<<<<< Updated upstream
 export const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
 
@@ -11,3 +12,11 @@ export const ProtectedRoute = ({ children }) => {
 
   return children;
 };
+=======
+export function ProtectedRoute({ children }) {
+  const { session, loading } = useAuth();
+  if (loading) return null;
+  if (!session) return <Navigate to="/login" replace />;
+  return children;
+}
+>>>>>>> Stashed changes

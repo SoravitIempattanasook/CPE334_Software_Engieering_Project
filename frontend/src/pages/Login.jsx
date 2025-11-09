@@ -7,7 +7,6 @@ export default function Login() {
   const { session } = useAuth();
 
   const [mode, setMode] = useState("signin");
-
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -21,10 +20,10 @@ export default function Login() {
   const [tipField, setTipField] = useState(null);
   const [tipMsg, setTipMsg] = useState("");
 
-  if (session) return <Navigate to="/" />;
+  if (session) return <Navigate to="/" replace />;
 
   const isPhoneValid = (v) => {
-    const cleaned = v.replace(/[^\d]/g, "");
+    const cleaned = String(v || "").replace(/[^\d]/g, "");
     return cleaned.length >= 9 && cleaned.length <= 15;
   };
 
@@ -40,18 +39,12 @@ export default function Login() {
     if (!/[A-Z]/.test(pw)) return "ต้องมีตัวอักษรพิมพ์ใหญ่ (A-Z) อย่างน้อย 1 ตัว";
     if (!/[a-z]/.test(pw)) return "ต้องมีตัวอักษรพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว";
     if (!/[0-9]/.test(pw)) return "ต้องมีตัวเลข (0-9) อย่างน้อย 1 ตัว";
-
     const allowedSpecial = /[!@#$%^&*_\-]/;
     const forbiddenSpecial = /[<>/"'`]/;
-
-    if (forbiddenSpecial.test(pw)) {
-      return 'ห้ามใช้อักขระพิเศษบางตัว เช่น < > " \' ` /';
-    }
-    if (!allowedSpecial.test(pw)) {
-      return "ต้องมีอักขระพิเศษอย่างน้อย 1 ตัว เช่น ! @ # $ % ^ & * _ -";
-    }
+    if (forbiddenSpecial.test(pw)) return 'ห้ามใช้อักขระพิเศษบางตัว เช่น < > " \' ` /';
+    if (!allowedSpecial.test(pw)) return "ต้องมีอักขระพิเศษอย่างน้อย 1 ตัว เช่น ! @ # $ % ^ & * _ -";
     return null;
-  };
+    };
 
   const handleSignIn = async (e) => {
     e.preventDefault();
@@ -69,17 +62,8 @@ export default function Login() {
     if (!isPhoneValid(phone)) return setErr("กรุณากรอกเบอร์โทรให้ถูกต้อง");
 
     const pwErr = validatePasswordRules(password);
-    if (pwErr) {
-      setTipField("password");
-      setTipMsg(pwErr);
-      return;
-    }
-
-    if (password !== confirmPw) {
-      setTipField("confirmPw");
-      setTipMsg("รหัสผ่านไม่ตรงกัน");
-      return;
-    }
+    if (pwErr) { setTipField("password"); setTipMsg(pwErr); return; }
+    if (password !== confirmPw) { setTipField("confirmPw"); setTipMsg("รหัสผ่านไม่ตรงกัน"); return; }
 
     setLoading(true);
     const { error } = await supabase.auth.signUp({
@@ -100,21 +84,16 @@ export default function Login() {
     }
   };
 
-  // ✅ Google Login แบบเลือกบัญชีทุกครั้ง
+  // Google Login (ไม่มีบังคับโดเมนแล้ว)
   const handleGoogle = async () => {
     resetAlerts();
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: window.location.origin,
-        queryParams: {
-          prompt: "select_account",   // 💥 บังคับ Google แสดงหน้าต่างเลือกบัญชีทุกครั้ง
-          hd: "kmutt.ac.th",          // 🎯 ให้แนะนำโดเมนมหาลัย (เป็น hint)
-        },
+        queryParams: { prompt: "select_account" },
       },
     });
-
     if (error) setErr(error.message);
   };
 
@@ -191,7 +170,7 @@ export default function Login() {
         <div style={{ textAlign: "center", margin: "16px 0", color: "#aaa" }}>or</div>
 
         <button onClick={handleGoogle} style={googleBtn}>
-          Sign in with KMUTT Account
+          Sign in with Google
         </button>
 
         <p style={{ textAlign: "center", marginTop: 16 }}>
