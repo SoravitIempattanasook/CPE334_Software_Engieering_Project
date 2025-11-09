@@ -1,22 +1,15 @@
+import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-<<<<<<< Updated upstream
-export const ProtectedRoute = ({ children }) => {
-  const { user } = useAuth();
+function ProtectedRoute({ children, roles }) {
+  const { user, role } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
 
-  if (!user) {
-    // ถ้าไม่มี user, ให้ redirect ไปหน้า login
-    return <Navigate to="/login" />;
+  if (roles && roles.length > 0) {
+    if (!roles.includes(role || 'guest')) return <Navigate to="/403" replace />;
   }
-
-  return children;
-};
-=======
-export function ProtectedRoute({ children }) {
-  const { session, loading } = useAuth();
-  if (loading) return null;
-  if (!session) return <Navigate to="/login" replace />;
   return children;
 }
->>>>>>> Stashed changes
+
+export default ProtectedRoute;

@@ -1,16 +1,12 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function RoleRedirect() {
-  const { role } = useAuth();
-  const navigate = useNavigate();
+  const { user, role } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
 
-  useEffect(() => {
-    if (role === "admin")       navigate("/dashboard", { replace: true });
-    else if (role === "activity_maker") navigate("/activity", { replace: true });
-    else /* student | guest */  navigate("/calendar", { replace: true });
-  }, [role, navigate]);
-
-  return null;
+  if (role === 'admin') return <Navigate to="/dashboard" replace />;
+  if (role === 'activity_maker') return <Navigate to="/activity-board" replace />;
+  // student & guest
+  return <Navigate to="/calendar" replace />;
 }
