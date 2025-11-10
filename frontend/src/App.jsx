@@ -1,4 +1,3 @@
-// frontend/src/App.jsx
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 
@@ -13,7 +12,6 @@ import ActivityBoard from './pages/ActivityBoard';
 import Forbidden from './pages/Forbidden';
 import ProfilePage from './pages/ProfilePage';
 
-// Layout ที่คง Sidebar ไว้ทุกหน้า (หลังล็อกอิน)
 function AppShell() {
   return (
     <ProtectedRoute roles={['admin', 'student', 'guest', 'activity_maker']}>
@@ -29,15 +27,15 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* หน้าไม่ต้องมี Sidebar */}
+          {/* หน้า login ไม่ต้องมี Sidebar */}
           <Route path="/login" element={<Login />} />
 
-          {/* กลุ่มหน้าที่ต้องมี Sidebar คงอยู่ */}
+          {/* ส่วนที่มี Sidebar */}
           <Route element={<AppShell />}>
-            {/* root: เด้งไปตาม role */}
+            {/* redirect ตาม role */}
             <Route path="/" element={<RoleRedirect />} />
 
-            {/* admin → dashboard */}
+            {/* admin */}
             <Route
               path="/dashboard"
               element={
@@ -47,27 +45,27 @@ function App() {
               }
             />
 
-            {/* student & guest → calendar */}
+            {/* calendar: เปิดให้ทุกคนเข้าได้ */}
             <Route
               path="/calendar"
               element={
-                <ProtectedRoute roles={['student', 'guest']}>
+                <ProtectedRoute roles={['guest', 'student', 'activity_maker', 'admin']}>
                   <CalendarPage />
                 </ProtectedRoute>
               }
             />
 
-            {/* activity_maker → activity board */}
+            {/* activity board: เปิดให้ทุกคนเข้าได้ */}
             <Route
               path="/activity-board"
               element={
-                <ProtectedRoute roles={['activity_maker']}>
+                <ProtectedRoute roles={['guest', 'student', 'activity_maker', 'admin']}>
                   <ActivityBoard />
                 </ProtectedRoute>
               }
             />
 
-            {/* โปรไฟล์: ให้ทุกบทบาทที่ล็อกอินเข้าถึงได้ */}
+            {/* profile */}
             <Route
               path="/profile"
               element={
@@ -77,7 +75,7 @@ function App() {
               }
             />
 
-            {/* หน้าข้อความสิทธิ์ไม่พอ (ยังมี Sidebar) */}
+            {/* หน้า Forbidden */}
             <Route path="/403" element={<Forbidden />} />
           </Route>
         </Routes>
