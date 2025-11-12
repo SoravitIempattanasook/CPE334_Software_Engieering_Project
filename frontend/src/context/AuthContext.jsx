@@ -50,7 +50,19 @@ export const AuthProvider = ({ children }) => {
   const [role, setRole] = useState("user");
   const [loading, setLoading] = useState(true);
 
+<<<<<<< Updated upstream
   // โหลด session ครั้งแรก
+=======
+  // ===== role/profile =====
+  const cachedRole = (() => {
+    try { return localStorage.getItem("app.role") || null; } catch { return null; }
+  })();
+  const [role, setRole] = useState(cachedRole);     // เริ่มจากค่าแคช (ถ้ามี), หรือ null
+  const [studentProfile, setStudentProfile] = useState(null);
+  const [loadingRole, setLoadingRole] = useState(false);
+
+  // ---------- Bootstrap auth ----------
+>>>>>>> Stashed changes
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -110,6 +122,7 @@ export const AuthProvider = ({ children }) => {
     return () => data.subscription.unsubscribe();
   }, []);
 
+<<<<<<< Updated upstream
   const user = session?.user || null;
 
   const value = useMemo(() => {
@@ -138,6 +151,132 @@ export const AuthProvider = ({ children }) => {
       },
     };
   }, [session, user, loading, role]);
+=======
+ // ---------- Load role/profile when user changes (Admin-first) ----------
+useEffect(() => {
+  let cancelled = false;
+
+  const loadRole = async () => {
+    if (!user) {
+      setRole("guest");
+      setStudentProfile(null);
+      return;
+    }
+
+    setLoadingRole(true);
+    try {
+      // 1) เช็ก Admin ก่อน (ใช้ head+count เร็วสุด และไม่ดึงบอดี้)
+      const { count: adminCount, error: adminErr } = await supabase
+        .from("Admin")
+        .select("user_id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      if (adminErr) console.warn("[AUTH] Admin error:", adminErr);
+      if (!cancelled && (adminCount ?? 0) > 0) {
+        setRole("admin");
+        setStudentProfile(null);
+        return; // ✅ เจอแล้ว จบ ไม่ต้องเช็กอย่างอื่น
+      }
+
+      // 2) เช็ก ActivityMaker ต่อ
+      const { count: makerCount, error: makerErr } = await supabase
+        .from("ActivityMaker")
+        .select("user_id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      if (makerErr) console.warn("[AUTH] Maker error:", makerErr);
+      if (!cancelled && (makerCount ?? 0) > 0) {
+        setRole("activity_maker");
+        setStudentProfile(null);
+        return; // ✅ เจอแล้ว จบ
+      }
+
+      // 3) สุดท้ายเช็ก Student (ต้องดึงโปรไฟล์มาด้วย)
+      const { data: student, error: studentErr } = await supabase
+        .from("Student")
+        .select("user_id, student_id, department, phone")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (studentErr) console.warn("[AUTH] Student error:", studentErr);
+
+      if (!cancelled && student) {
+        setRole("student");
+        setStudentProfile({
+          user_id: user.id,
+          student_id: student.student_id ?? null,
+          department: student.department ?? null,
+          phone: student.phone ?? null,
+        });
+        return;
+      }
+
+      // ไม่เจอเลย → guest
+      if (!cancelled) {
+        setRole("guest");
+        setStudentProfile(null);
+      }
+    } catch (e) {
+      console.error("[AUTH] role fetch failed:", e);
+      if (!cancelled) {
+        setRole("guest");
+        setStudentProfile(null);
+      }
+    } finally {
+      if (!cancelled) setLoadingRole(false);
+    }
+  };
+
+  loadRole();
+  return () => { cancelled = true; };
+}, [user]);
+
+
+    return () => { active = false; };
+  }, [user]);
+
+  // ---------- helpers ----------
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    (user?.email ? user.email.split("@")[0] : null) ||
+    null;
+
+  const domain = user?.email?.includes("@") ? user.email.split("@")[1] : null;
+
+  const deriveStudentYear = () => {
+    const mdYear = user?.user_metadata?.student_year;
+    if (mdYear) return mdYear;
+    const sid = String(studentProfile?.student_id || "");
+    if (/^\d{11}$/.test(sid)) {
+      const yy = sid.slice(0, 2);
+      return yy;
+    }
+    return null;
+  };
+  const studentYear = deriveStudentYear();
+
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    try { localStorage.removeItem("app.role"); } catch {}
+  };
+
+  const refreshUser = async () => {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) throw error;
+    setUser(data?.user ?? null);
+    return data?.user ?? null;
+  };
+
+  const loading = loadingAuth || loadingRole;
+
+  const value = useMemo(() => ({
+    session, user, role, loading,
+    studentProfile, displayName, domain, studentYear,
+    logout, signOut: logout, refreshUser,
+  }), [session, user, role, loading, studentProfile, displayName, domain, studentYear]);
+>>>>>>> Stashed changes
 
   return (
     <AuthContext.Provider value={value}>
