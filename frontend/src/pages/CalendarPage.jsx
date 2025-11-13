@@ -32,7 +32,20 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(false);
   const [types, setTypes] = useState([]);
 
+  // ฟอร์มตอน "สร้างกิจกรรม"
   const [form, setForm] = useState({
+    name: "",
+    description: "",
+    startDate: dayjs(),
+    endDate: dayjs(),
+    startTime: dayjs("09:00", "HH:mm"),
+    endTime: dayjs("10:00", "HH:mm"),
+    allDay: false,
+    type_id: null,
+  });
+
+  // ฟอร์มตอน "แก้ไขกิจกรรม"
+  const [editForm, setEditForm] = useState({
     name: "",
     description: "",
     startDate: dayjs(),
@@ -60,37 +73,70 @@ export default function CalendarPage() {
 
   // โหลดประเภทกิจกรรม
   const loadTypes = async () => {
-    const { data, error } = await supabase.from("ActivityType").select("*").eq("user_id", user.id);
-    if (!error) setTypes(data || []);
+    const { data, error } = await supabase
+      .from("ActivityType")
+      .select("*")
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error(error);
+      message.error("โหลดประเภทกิจกรรมไม่สำเร็จ");
+      return;
+    }
+    setTypes(data || []);
   };
 
-  // โหลดกิจกรรมทั้งหมด
- const loadUserEvents = async () => {
-  const { data, error } = await supabase
-    .from("Activity")
-    .select("id, name, description, start_time, end_time, all_day, ActivityType(color, name)")
-    // ✅ ดึงกิจกรรมที่เราเป็น student หรือเราเป็นผู้สร้าง
-    .or(`student_id.eq.${user.id},created_by.eq.${user.id}`)
-    .order("start_time", { ascending: true });
+  // โหลดกิจกรรมทั้งหมดของ user
+  const loadUserEvents = async () => {
+    const { data, error } = await supabase
+      .from("Activity")
+      .select(
+        "id, name, description, start_time, end_time, all_day, type_id, ActivityType(color, name)"
+      )
+      .or(`student_id.eq.${user.id},created_by.eq.${user.id}`)
+      .order("start_time", { ascending: true });
 
-  if (error) {
-    console.error("Supabase error:", error);
-    message.error("โหลดกิจกรรมไม่ได้: " + error.message);
-    return [];
-  }
+    if (error) {
+      console.error("Supabase error:", error);
+      message.error("โหลดกิจกรรมไม่ได้: " + error.message);
+      return [];
+    }
 
-  return (data || []).map((ev) => ({
-    id: String(ev.id),                    // ป้องกัน “2a”
-    title: ev.name?.trim() || "กิจกรรม",
-    start: ev.start_time,
-    end: ev.end_time,
-    allDay: ev.all_day,
-    description: ev.description,
-    color: ev.ActivityType?.color || "#2563eb",
-    typeName: ev.ActivityType?.name || "ทั่วไป",
-  }));
-};
+    return (data || []).map((ev) => {
+      const startRaw = ev.start_time || null;
+      const endRaw = ev.end_time || null;
 
+      const startDateObj = startRaw ? dayjs(startRaw).toDate() : null;
+
+      // เวลาไว้โชว์ใน modal (สิ้นสุดจริง)
+      let endModal = endRaw ? dayjs(endRaw).toDate() : null;
+      if (!endModal && startDateObj) {
+        const d = new Date(startDateObj);
+        d.setHours(23, 59, 0, 0);
+        endModal = d;
+      }
+
+      // เวลาให้ FullCalendar ใช้วาดแทบ (all-day ใช้ end แบบ exclusive: +1 วัน)
+      let endForCalendar = endModal;
+      if (ev.all_day && endModal) {
+        endForCalendar = dayjs(endModal).add(1, "day").startOf("day").toDate();
+      }
+
+      return {
+        id: String(ev.id),
+        title: ev.name?.trim() || "กิจกรรม",
+        start: startDateObj,
+        end: endForCalendar,
+        allDay: ev.all_day,
+        description: ev.description,
+        color: ev.ActivityType?.color || "#2563eb",
+        typeName: ev.ActivityType?.name || "ทั่วไป",
+        typeId: ev.type_id || null,
+        startRaw,
+        endRaw,
+      };
+    });
+  };
 
   // โหลดข้อมูลทั้งหมด
   const loadEvents = async () => {
@@ -108,7 +154,11 @@ export default function CalendarPage() {
   // 📅 แสดงกิจกรรมของวันปัจจุบัน
   useEffect(() => {
     const today = dayjs().format("YYYY-MM-DD");
-    setTodayEvents(events.filter((ev) => dayjs(ev.start).format("YYYY-MM-DD") === today));
+    setTodayEvents(
+      events.filter(
+        (ev) => ev.start && dayjs(ev.start).format("YYYY-MM-DD") === today
+      )
+    );
   }, [events]);
 
   // 🗓 คลิกวันที่เพื่อเพิ่มกิจกรรม
@@ -132,67 +182,136 @@ export default function CalendarPage() {
     setModalOpen(true);
   };
 
-  // 💾 เพิ่มกิจกรรมใหม่
-  const handleAddEvent = async () => {
-  if (!form.name) return message.warning("กรุณากรอกชื่อกิจกรรม");
+  // helper: แปลงฟอร์ม -> start/end string (local time)
+  const buildStartEndFromForm = (frm) => {
+    let start;
+    let end;
 
-  let start, end;
-  if (form.allDay) {
-    start = form.startDate.startOf("day").toISOString();
-    end   = form.endDate.endOf("day").toISOString();
-  } else {
-    start = form.startDate.hour(form.startTime.hour()).minute(form.startTime.minute()).toISOString();
-    end   = form.endDate.hour(form.endTime.hour()).minute(form.endTime.minute()).toISOString();
-  }
+    if (frm.allDay) {
+      // ทั้งวัน: 00:00 - 23:59 ของช่วงวันนั้น
+      start = frm.startDate
+        .hour(0)
+        .minute(0)
+        .second(0)
+        .millisecond(0)
+        .format("YYYY-MM-DD HH:mm:ss");
 
-  // ✅ payload กลาง
-  const payload = {
-    name: form.name,
-    description: form.description,
-    start_time: start,
-    end_time: end,
-    all_day: form.allDay,
-    type_id: form.type_id || null,
+      end = frm.endDate
+        .hour(23)
+        .minute(59)
+        .second(0)
+        .millisecond(0)
+        .format("YYYY-MM-DD HH:mm:ss");
+    } else {
+      // ไม่ทั้งวัน: ใช้เวลาจาก TimePicker
+      start = frm.startDate
+        .hour(frm.startTime.hour())
+        .minute(frm.startTime.minute())
+        .second(0)
+        .millisecond(0)
+        .format("YYYY-MM-DD HH:mm:ss");
+
+      end = frm.endDate
+        .hour(frm.endTime.hour())
+        .minute(frm.endTime.minute())
+        .second(0)
+        .millisecond(0)
+        .format("YYYY-MM-DD HH:mm:ss");
+    }
+
+    return { start, end };
   };
 
-  // ✅ นักเรียน -> ผูกกับ student_id, role อื่น -> ผูกกับ created_by
-  if (role === "student") {
-    payload.student_id = user.id;
-  } else {
-    payload.created_by = user.id;
-  }
+  // 💾 เพิ่มกิจกรรมใหม่
+  const handleAddEvent = async () => {
+    if (!form.name) return message.warning("กรุณากรอกชื่อกิจกรรม");
 
-  setLoading(true);
-  const { error } = await supabase.from("Activity").insert(payload);
-  setLoading(false);
+    const { start, end } = buildStartEndFromForm(form);
 
-  if (error) {
-    console.error(error);
-    message.error("เกิดข้อผิดพลาด: " + error.message);
-  } else {
-    message.success("เพิ่มกิจกรรมสำเร็จ 🎉");
-    setModalOpen(false);
-    loadEvents();
-  }
-};
+    const payload = {
+      name: form.name,
+      description: form.description,
+      start_time: start,
+      end_time: end,
+      all_day: form.allDay,
+      type_id: form.type_id || null,
+    };
 
+    if (role === "student") {
+      payload.student_id = user.id;
+    } else {
+      payload.created_by = user.id;
+    }
 
-  // ✏️ แก้ไขกิจกรรม
+    setLoading(true);
+    const { error } = await supabase.from("Activity").insert(payload);
+    setLoading(false);
+
+    if (error) {
+      console.error(error);
+      message.error("เกิดข้อผิดพลาด: " + error.message);
+    } else {
+      message.success("เพิ่มกิจกรรมสำเร็จ 🎉");
+      setModalOpen(false);
+      loadEvents();
+    }
+  };
+
+  // เริ่มเข้าโหมดแก้ไข -> เตรียม editForm ให้เหมือนตอนสร้าง
+  const startEdit = () => {
+    if (!detailModal) return;
+
+    const start = detailModal.start ? dayjs(detailModal.start) : dayjs();
+    const end = detailModal.end ? dayjs(detailModal.end) : start;
+    const isAllDay = !!detailModal.allDay;
+
+    setEditForm({
+      name: detailModal.name,
+      description: detailModal.description || "",
+      startDate: start,
+      endDate: end,
+      startTime: isAllDay ? dayjs("00:00", "HH:mm") : start,
+      endTime: isAllDay ? dayjs("23:59", "HH:mm") : end,
+      allDay: isAllDay,
+      type_id: detailModal.typeId || null,
+    });
+    setEditMode(true);
+  };
+
+  // ✏️ แก้ไขกิจกรรม (ครบทุกฟิลด์เหมือนตอนสร้าง)
   const handleEditEvent = async () => {
-    if (!detailModal.name) return message.warning("กรุณากรอกชื่อกิจกรรม");
+    if (!editForm?.name) return message.warning("กรุณากรอกชื่อกิจกรรม");
+
+    const { start, end } = buildStartEndFromForm(editForm);
+
     const { error } = await supabase
       .from("Activity")
       .update({
-        name: detailModal.name,
-        description: detailModal.description,
+        name: editForm.name,
+        description: editForm.description,
+        start_time: start,
+        end_time: end,
+        all_day: editForm.allDay,
+        type_id: editForm.type_id || null,
       })
       .eq("id", detailModal.id);
 
     if (error) {
+      console.error(error);
       message.error("แก้ไขไม่สำเร็จ ❌");
     } else {
       message.success("แก้ไขเรียบร้อย ✅");
       setEditMode(false);
+      setEditForm({
+        name: "",
+        description: "",
+        startDate: dayjs(),
+        endDate: dayjs(),
+        startTime: dayjs("09:00", "HH:mm"),
+        endTime: dayjs("10:00", "HH:mm"),
+        allDay: false,
+        type_id: null,
+      });
       setDetailModal(null);
       loadEvents();
     }
@@ -200,11 +319,27 @@ export default function CalendarPage() {
 
   // 🗑️ ลบกิจกรรม
   const handleDeleteEvent = async () => {
-    const { error } = await supabase.from("Activity").delete().eq("id", detailModal.id);
-    if (error) message.error("ลบไม่สำเร็จ ❌");
-    else {
+    const { error } = await supabase
+      .from("Activity")
+      .delete()
+      .eq("id", detailModal.id);
+
+    if (error) {
+      message.error("ลบไม่สำเร็จ ❌");
+    } else {
       message.success("ลบสำเร็จ 🗑️");
       setDetailModal(null);
+      setEditMode(false);
+      setEditForm({
+        name: "",
+        description: "",
+        startDate: dayjs(),
+        endDate: dayjs(),
+        startTime: dayjs("09:00", "HH:mm"),
+        endTime: dayjs("10:00", "HH:mm"),
+        allDay: false,
+        type_id: null,
+      });
       loadEvents();
     }
   };
@@ -217,17 +352,82 @@ export default function CalendarPage() {
       color: newType.color,
       user_id: user.id,
     });
-    if (error) message.error(error.message);
-    else {
+    if (error) {
+      console.error(error);
+      message.error("เพิ่มประเภทไม่สำเร็จ: " + error.message);
+    } else {
       message.success("เพิ่มประเภทสำเร็จ ✅");
-      setTypeModal(false);
+      setNewType({ name: "", color: "#3b82f6" });
       loadTypes();
     }
   };
 
+  // ❌ ลบประเภทกิจกรรม
+  const handleDeleteType = async (id, name) => {
+    const { error } = await supabase
+      .from("ActivityType")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error(error);
+      // ถ้ามี foreign key (ถูกใช้ใน Activity) จะลบไม่ได้
+      if (
+        error.message?.toLowerCase().includes("foreign key") ||
+        error.message?.toLowerCase().includes("violates")
+      ) {
+        message.error(
+          "ลบประเภทไม่ได้ เพราะมีการใช้งานในกิจกรรมอยู่ กรุณาเปลี่ยนประเภทของกิจกรรมก่อน"
+        );
+      } else {
+        message.error("ลบประเภทไม่สำเร็จ: " + error.message);
+      }
+    } else {
+      message.success(`ลบประเภท "${name}" สำเร็จ`);
+      // ถ้าแบบฟอร์มเลือก type นี้อยู่ ให้เคลียร์ออก
+      setForm((f) => (f.type_id === id ? { ...f, type_id: null } : f));
+      setEditForm((f) =>
+        f.type_id === id ? { ...f, type_id: null } : f
+      );
+      loadTypes();
+    }
+  };
+
+  // options ของประเภท (ให้ Select แสดงแค่จุดสี + ชื่อ)
+  const typeOptions = types.map((t) => ({
+    label: (
+      <span>
+        <span
+          style={{
+            display: "inline-block",
+            width: 12,
+            height: 12,
+            background: t.color,
+            borderRadius: "50%",
+            marginRight: 8,
+          }}
+        />
+        {t.name}
+      </span>
+    ),
+    value: t.id,
+    color: t.color,
+    name: t.name,
+  }));
+
   return (
-    <section style={{ padding: 20, display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <h1 style={{ fontSize: "1.8rem", fontWeight: 600, marginBottom: 20 }}>📅 My Calendar</h1>
+    <section
+      style={{
+        padding: 20,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+      }}
+    >
+      <h1 style={{ fontSize: "1.8rem", fontWeight: 600, marginBottom: 20 }}>
+        📅 My Calendar
+      </h1>
 
       {/* กิจกรรมวันนี้ */}
       <div
@@ -243,7 +443,8 @@ export default function CalendarPage() {
       >
         {todayEvents.length > 0 ? (
           <>
-            <strong>กิจกรรมวันนี้:</strong> {todayEvents.map((ev) => ev.title).join(", ")}
+            <strong>กิจกรรมวันนี้:</strong>{" "}
+            {todayEvents.map((ev) => ev.title).join(", ")}
           </>
         ) : (
           <span>วันนี้ยังไม่มีกิจกรรม 🎈</span>
@@ -262,55 +463,82 @@ export default function CalendarPage() {
         }}
       >
         <FullCalendar
-  plugins={[dayGridPlugin, interactionPlugin]}
-  initialView="dayGridMonth"
-  dateClick={handleDateClick}
-  eventClick={(info) => {
-    const e = info.event;
-    setDetailModal({
-      id: e.id,
-      name: e.title,
-      title: e.title,
-      start: e.start,
-      end: e.end,
-      description: e.extendedProps.description,
-      color: e.backgroundColor,
-      typeName: e.extendedProps.typeName,
-      allDay: e.allDay,
-    });
-  }}
-  eventContent={(arg) => {
-    const bg =
-      arg.event.backgroundColor || arg.event.extendedProps?.color || null;
-    const title = arg.event.title || "(ไม่มีชื่อ)";
+          plugins={[dayGridPlugin, interactionPlugin]}
+          initialView="dayGridMonth"
+          dateClick={handleDateClick}
+          eventClick={(info) => {
+            const e = info.event;
+            const props = e.extendedProps || {};
 
-    // ถ้าเป็นอีเวนต์แบบบล็อกที่มีพื้นหลัง (เช่น วันหยุดไทย)
-    if (arg.event.allDay && bg) {
-      return <div style={{ color: "#fff", fontWeight: 600 }}>{title}</div>;
-    }
+            const startFromRaw = props.startRaw
+              ? dayjs(props.startRaw)
+              : e.start
+              ? dayjs(e.start)
+              : null;
 
-    // อีเวนต์ปกติใน month view: แสดง "จุดสี" + ชื่อ (เหมือนดีฟอลต์)
-    return (
-      <div className="fc-event-main" style={{ fontWeight: 500 }}>
-        <span
-          className="fc-daygrid-event-dot"
-          style={{ borderColor: bg || "#3788d8" }}
+            let endFromRaw = null;
+            if (props.endRaw) {
+              endFromRaw = dayjs(props.endRaw);
+            } else if (e.end) {
+              endFromRaw = dayjs(e.end);
+            } else if (e.allDay && e.start) {
+              endFromRaw = dayjs(e.start).endOf("day");
+            }
+
+            setDetailModal({
+              id: e.id,
+              name: e.title,
+              title: e.title,
+              start: startFromRaw ? startFromRaw.toDate() : null,
+              end: endFromRaw ? endFromRaw.toDate() : null,
+              description: props.description,
+              color: e.backgroundColor,
+              typeName: props.typeName,
+              typeId: props.typeId,
+              allDay: e.allDay,
+            });
+            setEditMode(false);
+            setEditForm({
+              name: "",
+              description: "",
+              startDate: dayjs(),
+              endDate: dayjs(),
+              startTime: dayjs("09:00", "HH:mm"),
+              endTime: dayjs("10:00", "HH:mm"),
+              allDay: false,
+              type_id: null,
+            });
+          }}
+          eventContent={(arg) => {
+            const bg =
+              arg.event.backgroundColor || arg.event.extendedProps?.color || null;
+            const title = arg.event.title || "(ไม่มีชื่อ)";
+
+            if (arg.event.allDay && bg) {
+              return (
+                <div style={{ color: "#fff", fontWeight: 600 }}>{title}</div>
+              );
+            }
+
+            return (
+              <div className="fc-event-main" style={{ fontWeight: 500 }}>
+                <span
+                  className="fc-daygrid-event-dot"
+                  style={{ borderColor: bg || "#3788d8" }}
+                />
+                <span className="fc-event-title">{title}</span>
+              </div>
+            );
+          }}
+          events={events}
+          height="80vh"
+          nowIndicator={true}
+          headerToolbar={{
+            left: "prev,next today",
+            center: "title",
+            right: "dayGridMonth,dayGridWeek,dayGridDay",
+          }}
         />
-        <span className="fc-event-title">{title}</span>
-      </div>
-    );
-  }}
-  events={events}
-  height="80vh"
-  nowIndicator={true}
-  headerToolbar={{
-    left: "prev,next today",
-    center: "title",
-    right: "dayGridMonth,dayGridWeek,dayGridDay",
-  }}
-/>
-
-
       </div>
 
       {/* Modal: เพิ่มกิจกรรม */}
@@ -350,7 +578,24 @@ export default function CalendarPage() {
         </div>
         <Checkbox
           checked={form.allDay}
-          onChange={(e) => setForm({ ...form, allDay: e.target.checked })}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            if (checked) {
+              setForm({
+                ...form,
+                allDay: true,
+                startTime: dayjs("00:00", "HH:mm"),
+                endTime: dayjs("23:59", "HH:mm"),
+              });
+            } else {
+              setForm({
+                ...form,
+                allDay: false,
+                startTime: dayjs("09:00", "HH:mm"),
+                endTime: dayjs("10:00", "HH:mm"),
+              });
+            }
+          }}
           style={{ marginTop: 10 }}
         >
           ทั้งวัน
@@ -375,62 +620,77 @@ export default function CalendarPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Select
             placeholder="เลือกประเภท"
-            value={form.type_id}
-            onChange={(v) => setForm({ ...form, type_id: v })}
-            style={{ flex: 1 }}
-            options={types.map((t) => ({
-              label: (
-                <span>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      width: 12,
-                      height: 12,
-                      background: t.color,
-                      borderRadius: "50%",
-                      marginRight: 8,
-                    }}
-                  ></span>
-                  {t.name}
-                </span>
-              ),
-              value: t.id,
-            }))}
+          value={form.type_id}
+          onChange={(v) => setForm({ ...form, type_id: v })}
+          style={{ flex: 1 }}
+          options={typeOptions}
           />
-          <Button onClick={() => setTypeModal(true)}>+ ประเภท</Button>
+          <Button onClick={() => setTypeModal(true)}>จัดการประเภท</Button>
         </div>
       </Modal>
 
-      {/* Modal: รายละเอียดกิจกรรม */}
+      {/* Modal: รายละเอียด / แก้ไขกิจกรรม */}
       <Modal
         title="📖 รายละเอียดกิจกรรม"
         open={!!detailModal}
         onCancel={() => {
           setDetailModal(null);
           setEditMode(false);
+          setEditForm({
+            name: "",
+            description: "",
+            startDate: dayjs(),
+            endDate: dayjs(),
+            startTime: dayjs("09:00", "HH:mm"),
+            endTime: dayjs("10:00", "HH:mm"),
+            allDay: false,
+            type_id: null,
+          });
         }}
         footer={
           editMode
             ? [
-                <Button onClick={() => setEditMode(false)}>ยกเลิก</Button>,
-                <Button type="primary" onClick={handleEditEvent}>
+                <Button
+                  key="cancel-edit"
+                  onClick={() => {
+                    setEditMode(false);
+                  }}
+                >
+                  ยกเลิก
+                </Button>,
+                <Button key="save" type="primary" onClick={handleEditEvent}>
                   บันทึก
                 </Button>,
               ]
             : [
-                <Button key="edit" onClick={() => setEditMode(true)}>
+                <Button key="edit" onClick={startEdit}>
                   แก้ไข
                 </Button>,
-                <Popconfirm title="ลบกิจกรรมนี้?" onConfirm={handleDeleteEvent}>
+                <Popconfirm
+                  key="delete"
+                  title="ลบกิจกรรมนี้?"
+                  onConfirm={handleDeleteEvent}
+                >
                   <Button danger>ลบ</Button>
                 </Popconfirm>,
-                <Button onClick={() => setDetailModal(null)}>ปิด</Button>,
+                <Button
+                  key="close"
+                  onClick={() => {
+                    setDetailModal(null);
+                    setEditMode(false);
+                  }}
+                >
+                  ปิด
+                </Button>,
               ]
         }
       >
+        {/* โหมดดูรายละเอียด */}
         {detailModal && !editMode && (
           <div style={{ lineHeight: 1.7 }}>
-            <p><strong>ชื่อกิจกรรม:</strong> {detailModal.name}</p>
+            <p>
+              <strong>ชื่อกิจกรรม:</strong> {detailModal.name}
+            </p>
             <p>
               <strong>ประเภท:</strong>{" "}
               <span
@@ -441,17 +701,23 @@ export default function CalendarPage() {
                   borderRadius: 6,
                 }}
               >
-                {detailModal.typeName}
+                {detailModal.typeName || "ทั่วไป"}
               </span>
             </p>
-            <p><strong>รายละเอียด:</strong> {detailModal.description || "-"}</p>
+            <p>
+              <strong>รายละเอียด:</strong> {detailModal.description || "-"}
+            </p>
             <p>
               <strong>เริ่ม:</strong>{" "}
-              {dayjs(detailModal.start).format("DD/MM/YYYY HH:mm")}
+              {detailModal.start
+                ? dayjs(detailModal.start).format("DD/MM/YYYY HH:mm")
+                : "-"}
             </p>
             <p>
               <strong>สิ้นสุด:</strong>{" "}
-              {dayjs(detailModal.end).format("DD/MM/YYYY HH:mm")}
+              {detailModal.end
+                ? dayjs(detailModal.end).format("DD/MM/YYYY HH:mm")
+                : "-"}
             </p>
             {detailModal.allDay && (
               <p style={{ color: "#16a34a" }}>📅 กิจกรรมนี้เป็นทั้งวัน</p>
@@ -459,46 +725,185 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {editMode && detailModal && (
+        {/* โหมดแก้ไข (ฟอร์มเหมือนตอนสร้าง) */}
+        {editMode && (
           <>
             <Input
-              value={detailModal.name}
+              placeholder="ชื่อกิจกรรม"
+              value={editForm.name}
               onChange={(e) =>
-                setDetailModal({ ...detailModal, name: e.target.value })
+                setEditForm({ ...editForm, name: e.target.value })
               }
             />
             <Input.TextArea
               rows={3}
-              value={detailModal.description}
+              placeholder="รายละเอียด"
+              value={editForm.description}
               onChange={(e) =>
-                setDetailModal({ ...detailModal, description: e.target.value })
+                setEditForm({
+                  ...editForm,
+                  description: e.target.value,
+                })
               }
               style={{ marginTop: 10 }}
             />
+            <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+              <DatePicker
+                value={editForm.startDate}
+                onChange={(d) =>
+                  setEditForm({ ...editForm, startDate: d })
+                }
+                format="DD/MM/YYYY"
+                style={{ width: "100%" }}
+              />
+              <DatePicker
+                value={editForm.endDate}
+                onChange={(d) =>
+                  setEditForm({ ...editForm, endDate: d })
+                }
+                format="DD/MM/YYYY"
+                style={{ width: "100%" }}
+              />
+            </div>
+            <Checkbox
+              checked={editForm.allDay}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                if (checked) {
+                  setEditForm({
+                    ...editForm,
+                    allDay: true,
+                    startTime: dayjs("00:00", "HH:mm"),
+                    endTime: dayjs("23:59", "HH:mm"),
+                  });
+                } else {
+                  setEditForm({
+                    ...editForm,
+                    allDay: false,
+                    startTime: dayjs("09:00", "HH:mm"),
+                    endTime: dayjs("10:00", "HH:mm"),
+                  });
+                }
+              }}
+              style={{ marginTop: 10 }}
+            >
+              ทั้งวัน
+            </Checkbox>
+            {!editForm.allDay && (
+              <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                <TimePicker
+                  format="HH:mm"
+                  value={editForm.startTime}
+                  onChange={(t) =>
+                    setEditForm({ ...editForm, startTime: t })
+                  }
+                  style={{ width: "100%" }}
+                />
+                <TimePicker
+                  format="HH:mm"
+                  value={editForm.endTime}
+                  onChange={(t) =>
+                    setEditForm({ ...editForm, endTime: t })
+                  }
+                  style={{ width: "100%" }}
+                />
+              </div>
+            )}
+            <Divider />
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+            >
+              <Select
+                placeholder="เลือกประเภท"
+                value={editForm.type_id}
+                onChange={(v) =>
+                  setEditForm({ ...editForm, type_id: v })
+                }
+                style={{ flex: 1 }}
+                options={typeOptions}
+              />
+              <Button onClick={() => setTypeModal(true)}>
+                จัดการประเภท
+              </Button>
+            </div>
           </>
         )}
       </Modal>
 
-      {/* Modal: สร้างประเภท */}
+      {/* Modal: สร้าง/จัดการประเภท */}
       <Modal
-        title="🎨 สร้างประเภทใหม่"
+        title="🎨 จัดการประเภทกิจกรรม"
         open={typeModal}
         onCancel={() => setTypeModal(false)}
-        onOk={handleAddType}
+        onOk={() => setTypeModal(false)}
+        okText="ปิด"
+        cancelButtonProps={{ style: { display: "none" } }}
       >
+        <h4>เพิ่มประเภทใหม่</h4>
         <Input
           placeholder="ชื่อประเภท"
           value={newType.name}
-          onChange={(e) => setNewType({ ...newType, name: e.target.value })}
+          onChange={(e) =>
+            setNewType({ ...newType, name: e.target.value })
+          }
           style={{ marginBottom: 10 }}
         />
         <label>เลือกสี:</label>
         <Input
           type="color"
           value={newType.color}
-          onChange={(e) => setNewType({ ...newType, color: e.target.value })}
-          style={{ width: "100%" }}
+          onChange={(e) =>
+            setNewType({ ...newType, color: e.target.value })
+          }
+          style={{ width: "100%", marginBottom: 10 }}
         />
+        <Button type="primary" block onClick={handleAddType}>
+          + เพิ่มประเภท
+        </Button>
+
+        <Divider />
+
+        <h4>ประเภทที่มีอยู่</h4>
+        {types.length === 0 && <p style={{ color: "#6b7280" }}>ยังไม่มีประเภท</p>}
+        {types.map((t) => (
+          <div
+            key={t.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "6px 8px",
+              borderRadius: 8,
+              border: "1px solid #e5e7eb",
+              marginBottom: 6,
+            }}
+          >
+            <span>
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 12,
+                  height: 12,
+                  background: t.color,
+                  borderRadius: "50%",
+                  marginRight: 8,
+                }}
+              />
+              {t.name}
+            </span>
+            <Popconfirm
+              title="ลบประเภทนี้?"
+              okText="ลบ"
+              okType="danger"
+              cancelText="ยกเลิก"
+              onConfirm={() => handleDeleteType(t.id, t.name)}
+            >
+              <Button danger size="small">
+                ลบ
+              </Button>
+            </Popconfirm>
+          </div>
+        ))}
       </Modal>
     </section>
   );
