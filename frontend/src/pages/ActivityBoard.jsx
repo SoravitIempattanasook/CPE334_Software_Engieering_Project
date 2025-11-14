@@ -11,6 +11,7 @@ export default function ActivityBoard() {
   const [joining, setJoining] = useState(null);
   const [err, setErr] = useState("");
   const [joinCounts, setJoinCounts] = useState({});
+  const [userJoined, setUserJoined] = useState({});
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -70,17 +71,21 @@ export default function ActivityBoard() {
     };
   }, [role, myDept]);
 
-  // =============== Fetch Join Counts ===============
+  // =============== Fetch Join Counts + User Joined ===============
   useEffect(() => {
     if (events.length === 0) {
       setJoinCounts({});
+      setUserJoined({});
       return;
     }
 
     (async () => {
+      const eventIds = events.map((e) => e.event_id);
+
       const { data, error } = await supabase
         .from("JoinEvent")
-        .select("event_id, user_id");
+        .select("event_id, user_id")
+        .in("event_id", eventIds);
 
       if (error) {
         console.error("Join count error:", error);
@@ -88,27 +93,69 @@ export default function ActivityBoard() {
       }
 
       const counts = {};
+      const joinedByUser = {};
+
       data?.forEach((row) => {
         counts[row.event_id] = (counts[row.event_id] || 0) + 1;
+        if (user?.id && row.user_id === user.id) {
+          joinedByUser[row.event_id] = true;
+        }
       });
-      setJoinCounts(counts);
-    })();
-  }, [events]);
 
-  // =============== Sort Events ===============
+      setJoinCounts(counts);
+      setUserJoined(joinedByUser);
+    })();
+  }, [events, user?.id]);
+
+  // =============== Realtime Join Counts ===============
+  useEffect(() => {
+    const channel = supabase
+      .channel("join-event-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "JoinEvent" },
+        (payload) => {
+          const newRow = payload.new;
+          if (!newRow) return;
+
+          const { event_id, user_id } = newRow;
+
+          // update total count realtime
+          setJoinCounts((prev) => ({
+            ...prev,
+            [event_id]: (prev[event_id] || 0) + 1,
+          }));
+
+          // mark joined for current user
+          if (user?.id && user_id === user.id) {
+            setUserJoined((prev) => ({ ...prev, [event_id]: true }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  // =============== Sort + Filter Events ===============
+  // เรียงตาม start_event จากใกล้ถึงก่อน และ "ไม่แสดงกิจกรรมที่ผ่านไปแล้ว"
+  // กำหนดว่ากิจกรรมที่ผ่านไปแล้ว = end_event < ตอนนี้
   const sortedEvents = useMemo(() => {
     if (!events || events.length === 0) return [];
     const now = new Date();
-    const upcoming = [];
-    const past = [];
-    for (const e of events) {
-      const s = e.start_event ? new Date(e.start_event) : null;
-      if (s && s >= now) upcoming.push(e);
-      else past.push(e);
-    }
-    upcoming.sort((a, b) => new Date(a.start_event) - new Date(b.start_event));
-    past.sort((a, b) => new Date(b.start_event) - new Date(a.start_event));
-    return [...upcoming, ...past];
+
+    return events
+      .filter((e) => {
+        const end = e.end_event ? new Date(e.end_event) : null;
+        // แสดงเฉพาะกิจกรรมที่ยังไม่สิ้นสุด (หรือไม่มี end_event)
+        return !end || end >= now;
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.start_event).getTime() - new Date(b.start_event).getTime()
+      );
   }, [events]);
 
   // =============== Join Event ===============
@@ -118,6 +165,13 @@ export default function ActivityBoard() {
       alert("กรุณาเข้าสู่ระบบก่อน");
       return;
     }
+
+    // กันการกดซ้ำถ้า state บอกว่า join แล้ว
+    if (userJoined[e.event_id]) {
+      alert("คุณเข้าร่วมกิจกรรมนี้แล้ว");
+      return;
+    }
+
     setJoining(e.event_id);
     setErr("");
 
@@ -136,6 +190,7 @@ export default function ActivityBoard() {
 
     if (exist && exist.user_id) {
       alert("คุณเข้าร่วมกิจกรรมนี้แล้ว");
+      setUserJoined((prev) => ({ ...prev, [e.event_id]: true }));
       setJoining(null);
       return;
     }
@@ -145,13 +200,13 @@ export default function ActivityBoard() {
       .insert({ user_id: user.id, event_id: e.event_id });
 
     setJoining(null);
-    if (error) setErr(error.message);
-    else {
+    if (error) {
+      setErr(error.message);
+    } else {
       alert("เข้าร่วมกิจกรรมแล้ว 🎉");
-      setJoinCounts((prev) => ({
-        ...prev,
-        [e.event_id]: (prev[e.event_id] || 0) + 1,
-      }));
+      // ปิดปุ่มทันทีฝั่ง client
+      setUserJoined((prev) => ({ ...prev, [e.event_id]: true }));
+      // joinCounts จะอัปเดตจาก realtime subscription
     }
   };
 
@@ -219,7 +274,10 @@ export default function ActivityBoard() {
         poster_url,
       };
 
-      const { data, error } = await supabase.from("Event").insert(payload).select();
+      const { data, error } = await supabase
+        .from("Event")
+        .insert(payload)
+        .select();
       if (error) throw error;
 
       setEvents((prev) => [...(prev || []), ...(data || [])].filter(canSee));
@@ -291,6 +349,7 @@ export default function ActivityBoard() {
               joining={joining === e.event_id}
               onJoin={() => joinEvent(e)}
               joinCount={joinCounts[e.event_id] || 0}
+              hasJoined={!!userJoined[e.event_id]}
             />
           ))}
         </div>
@@ -317,7 +376,7 @@ export default function ActivityBoard() {
 }
 
 // =============== PosterCard ===============
-function PosterCard({ ev, canJoin, joining, onJoin, joinCount }) {
+function PosterCard({ ev, canJoin, joining, onJoin, joinCount, hasJoined }) {
   const start = ev.start_event ? new Date(ev.start_event) : null;
   const end = ev.end_event ? new Date(ev.end_event) : null;
   const dformat = (d) =>
@@ -342,7 +401,9 @@ function PosterCard({ ev, canJoin, joining, onJoin, joinCount }) {
         minHeight: 320,
       }}
     >
-      <div style={{ position: "relative", aspectRatio: "3 / 4", background: "#f1f5f9" }}>
+      <div
+        style={{ position: "relative", aspectRatio: "3 / 4", background: "#f1f5f9" }}
+      >
         {ev.poster_url ? (
           <img
             src={ev.poster_url}
@@ -364,23 +425,41 @@ function PosterCard({ ev, canJoin, joining, onJoin, joinCount }) {
           </div>
         )}
         <div style={{ position: "absolute", bottom: 8, right: 8 }}>
-          <button
-            onClick={onJoin}
-            disabled={!canJoin || joining}
-            title={canJoin ? "เข้าร่วมกิจกรรมนี้" : "เฉพาะนักศึกษาที่มีสิทธิ์เท่านั้น"}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 999,
-              border: "1px solid #e2e8f0",
-              background: canJoin ? "#2563eb" : "#f1f5f9",
-              color: canJoin ? "#fff" : "#94a3b8",
-              cursor: canJoin ? "pointer" : "not-allowed",
-              fontWeight: 700,
-              boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
-            }}
-          >
-            {joining ? "Joining…" : "Join"}
-          </button>
+          {hasJoined ? (
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: "#dcfce7",
+                color: "#166534",
+                fontWeight: 700,
+                border: "1px solid #bbf7d0",
+                fontSize: 12,
+              }}
+            >
+              ✅ คุณเข้าร่วมแล้ว
+            </div>
+          ) : (
+            <button
+              onClick={onJoin}
+              disabled={!canJoin || joining}
+              title={
+                canJoin ? "เข้าร่วมกิจกรรมนี้" : "เฉพาะนักศึกษาที่มีสิทธิ์เท่านั้น"
+              }
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                border: "1px solid #e2e8f0",
+                background: canJoin ? "#2563eb" : "#f1f5f9",
+                color: canJoin ? "#fff" : "#94a3b8",
+                cursor: canJoin ? "pointer" : "not-allowed",
+                fontWeight: 700,
+                boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+              }}
+            >
+              {joining ? "Joining…" : "Join"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -440,7 +519,9 @@ function CreateEventModal({ form, onChange, onSubmit, creating, onClose }) {
 
         {/* form */}
         <form onSubmit={onSubmit} style={{ padding: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}
+          >
             {/* left column */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <label style={{ fontWeight: 700 }}>ชื่อกิจกรรม *</label>
@@ -472,7 +553,9 @@ function CreateEventModal({ form, onChange, onSubmit, creating, onClose }) {
                 style={inputStyle}
               />
 
-              <label style={{ fontWeight: 700 }}>สำหรับภาค (ปล่อยว่าง = Public)</label>
+              <label style={{ fontWeight: 700 }}>
+                สำหรับภาค (ปล่อยว่าง = Public)
+              </label>
               <input
                 name="for_department"
                 value={form.for_department}
@@ -504,7 +587,9 @@ function CreateEventModal({ form, onChange, onSubmit, creating, onClose }) {
                 required
               />
 
-              <label style={{ fontWeight: 700 }}>โปสเตอร์กิจกรรม (แนะนำ 3:4)</label>
+              <label style={{ fontWeight: 700 }}>
+                โปสเตอร์กิจกรรม (แนะนำ 3:4)
+              </label>
               <input
                 type="file"
                 name="poster_file"
