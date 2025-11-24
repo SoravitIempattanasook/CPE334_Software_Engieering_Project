@@ -41,7 +41,9 @@ export default function Login() {
     if (!/[a-z]/.test(pw)) return "ต้องมีตัวอักษรพิมพ์เล็ก (a-z) อย่างน้อย 1 ตัว";
     if (!/[0-9]/.test(pw)) return "ต้องมีตัวเลข (0-9) อย่างน้อย 1 ตัว";
 
-    const allowedSpecial = /[!@#$%^&*_\-]/;
+    // ✅ แก้ไข: เอา \ ออกจาก _\- เป็น _-
+    // เครื่องหมาย - ถ้าอยู่ท้ายสุดของ [] ไม่ต้อง escape ครับ
+    const allowedSpecial = /[!@#$%^&*_-]/; 
     const forbiddenSpecial = /[<>/"'`]/;
 
     if (forbiddenSpecial.test(pw)) {
@@ -94,13 +96,12 @@ export default function Login() {
 
     if (error) setErr(error.message);
     else {
-      setMsg("สมัครสำเร็จ! โปรดยืนยันอีเมลเพื่อเข้าสู่ระบบ ✅");
+      setMsg("สมัครสำเร็จ! หากยืนยันอีเมลแล้วสามารถล็อกอินได้เลย ✅");
       setMode("signin");
       setFullName(""); setPhone(""); setEmail(""); setPassword(""); setConfirmPw("");
     }
   };
 
-  // ✅ Google Login แบบเลือกบัญชีทุกครั้ง
   const handleGoogle = async () => {
     resetAlerts();
 
@@ -109,8 +110,7 @@ export default function Login() {
       options: {
         redirectTo: window.location.origin,
         queryParams: {
-          prompt: "select_account",   // 💥 บังคับ Google แสดงหน้าต่างเลือกบัญชีทุกครั้ง
-          hd: "kmutt.ac.th",          // 🎯 ให้แนะนำโดเมนมหาลัย (เป็น hint)
+          prompt: "select_account",
         },
       },
     });
@@ -121,7 +121,7 @@ export default function Login() {
   return (
     <div style={rootWrap}>
       <div style={card}>
-        <h2 style={{ textAlign: "center", marginBottom: 24 }}>
+        <h2 style={{ textAlign: "center", marginBottom: 24, color: '#333' }}>
           {mode === "signin" ? "Welcome back 👋" : "Create your account ✨"}
         </h2>
 
@@ -132,24 +132,24 @@ export default function Login() {
           {mode === "signup" && (
             <>
               <div style={field}>
-                <label>Full name</label>
-                <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} />
+                <label style={labelStyle}>Full name</label>
+                <input value={fullName} onChange={(e) => setFullName(e.target.value)} style={inputStyle} required />
               </div>
 
               <div style={field}>
-                <label>Phone number</label>
-                <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} style={inputStyle} />
+                <label style={labelStyle}>Phone number</label>
+                <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} style={inputStyle} placeholder="08XXXXXXXX" />
               </div>
             </>
           )}
 
           <div style={field}>
-            <label>Email</label>
+            <label style={labelStyle}>Email</label>
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
           </div>
 
           <div style={{ ...field, position: "relative" }}>
-            <label>Password</label>
+            <label style={labelStyle}>Password</label>
             <input
               type="password"
               minLength={8}
@@ -158,16 +158,16 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               style={inputStyle}
               onFocus={() => tipField === "password" && setTipField(null)}
-              placeholder="อย่างน้อย 8 ตัว (A-Z, a-z, 0-9, และ !@#$%^&*_-)"
+              placeholder="อย่างน้อย 8 ตัว (A-Z, a-z, 0-9, !@#)"
             />
             {tipField === "password" && (
-              <div className="tooltip tooltip-top-left">{tipMsg}</div>
+              <div style={tooltipStyle}>{tipMsg}</div>
             )}
           </div>
 
           {mode === "signup" && (
             <div style={{ ...field, position: "relative" }}>
-              <label>Re-enter password</label>
+              <label style={labelStyle}>Re-enter password</label>
               <input
                 type="password"
                 minLength={8}
@@ -178,27 +178,28 @@ export default function Login() {
                 onFocus={() => tipField === "confirmPw" && setTipField(null)}
               />
               {tipField === "confirmPw" && (
-                <div className="tooltip tooltip-top-left">{tipMsg}</div>
+                <div style={tooltipStyle}>{tipMsg}</div>
               )}
             </div>
           )}
 
-          <button type="submit" disabled={loading} style={primaryBtn}>
+          <button type="submit" disabled={loading} style={{ ...primaryBtn, opacity: loading ? 0.7 : 1 }}>
             {loading ? "Processing..." : mode === "signin" ? "Sign in" : "Sign up"}
           </button>
         </form>
 
-        <div style={{ textAlign: "center", margin: "16px 0", color: "#aaa" }}>or</div>
+        <div style={{ textAlign: "center", margin: "16px 0", color: "#aaa", fontSize: "0.9rem" }}>or</div>
 
         <button onClick={handleGoogle} style={googleBtn}>
-          Sign in with KMUTT Account
+           <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style={{width: 20, marginRight: 8, verticalAlign: 'bottom'}} />
+           Sign in with Google
         </button>
 
-        <p style={{ textAlign: "center", marginTop: 16 }}>
+        <p style={{ textAlign: "center", marginTop: 16, fontSize: "0.9rem", color: "#666" }}>
           {mode === "signin" ? (
-            <>New here? <a href="#" onClick={() => { resetAlerts(); setMode("signup"); }}>Create an account</a></>
+            <>New here? <span style={linkStyle} onClick={() => { resetAlerts(); setMode("signup"); }}>Create an account</span></>
           ) : (
-            <>Already have an account? <a href="#" onClick={() => { resetAlerts(); setMode("signin"); }}>Sign in</a></>
+            <>Already have an account? <span style={linkStyle} onClick={() => { resetAlerts(); setMode("signin"); }}>Sign in</span></>
           )}
         </p>
       </div>
@@ -207,11 +208,19 @@ export default function Login() {
 }
 
 /* Styles */
-const rootWrap = { display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f7f8fa" };
-const card = { width: "100%", maxWidth: 420, background: "#fff", padding: 32, borderRadius: 16, boxShadow: "0 8px 24px rgba(0,0,0,0.08)" };
-const field = { marginBottom: 12 };
-const inputStyle = { width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ccc", fontSize: "1rem" };
-const primaryBtn = { width: "100%", padding: "12px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "8px", fontWeight: 600, cursor: "pointer" };
-const googleBtn = { width: "100%", padding: "12px", background: "#fff", border: "1px solid #ccc", borderRadius: "8px", fontWeight: 600, cursor: "pointer" };
-const msgOk = { background: "#e8fff0", border: "1px solid #b5f0c8", padding: 10, borderRadius: 8, marginBottom: 12 };
-const msgErr = { background: "#ffecef", border: "1px solid #ffb7c1", padding: 10, borderRadius: 8, marginBottom: 12 };
+const rootWrap = { display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f0f2f5", fontFamily: "'Inter', sans-serif" };
+const card = { width: "100%", maxWidth: 420, background: "#fff", padding: "40px 32px", borderRadius: 16, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" };
+const field = { marginBottom: 16 };
+const labelStyle = { display: "block", marginBottom: 6, fontSize: "0.9rem", fontWeight: 500, color: "#333" };
+const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "1rem", outline: "none", boxSizing: "border-box" };
+const primaryBtn = { width: "100%", padding: "12px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "8px", fontWeight: 600, cursor: "pointer", fontSize: "1rem", marginTop: 8 };
+const googleBtn = { width: "100%", padding: "12px", background: "#fff", border: "1px solid #ddd", borderRadius: "8px", fontWeight: 500, cursor: "pointer", display: "flex", justifyContent: "center", alignItems: "center", color: "#333" };
+const msgOk = { background: "#e8fff0", color: "#1b5e20", border: "1px solid #b5f0c8", padding: 10, borderRadius: 8, marginBottom: 16, fontSize: "0.9rem" };
+const msgErr = { background: "#ffecef", color: "#b71c1c", border: "1px solid #ffb7c1", padding: 10, borderRadius: 8, marginBottom: 16, fontSize: "0.9rem" };
+const linkStyle = { color: "#2563eb", cursor: "pointer", fontWeight: 500, marginLeft: 4 };
+
+const tooltipStyle = {
+    position: "absolute", top: "100%", left: 0, marginTop: 4,
+    background: "#333", color: "#fff", padding: "6px 10px", borderRadius: 4,
+    fontSize: "0.8rem", zIndex: 10, width: "100%"
+};

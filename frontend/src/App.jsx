@@ -1,45 +1,50 @@
-import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-import ProtectedRoute from './components/ProtectedRoute';
-import RoleRedirect from './components/RoleRedirect';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import SidebarLayout from './components/SidebarLayout';
 
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import CalendarPage from './pages/CalendarPage';
-import ActivityBoard from './pages/ActivityBoard';
-import Forbidden from './pages/Forbidden';
-import ProfilePage from './pages/ProfilePage';
 import Settings from './pages/Settings';
 import AdminRequests from './pages/AdminRequests';
+import ActivityBoard from './pages/ActivityBoard'; 
+import CalendarPage from './pages/CalendarPage';
+import ProfilePage from './pages/ProfilePage'; // ✅ Import ไฟล์จริง
 
-function AppShell() {
-  return (
-    <ProtectedRoute roles={['admin', 'student', 'guest', 'activity_maker']}>
-      <SidebarLayout>
-        <Outlet />
-      </SidebarLayout>
-    </ProtectedRoute>
-  );
-}
+// --- Placeholder Pages ---
+const Forbidden = () => <div style={{padding: 40, textAlign: 'center', color: 'red'}}><h1>⛔ 403 Forbidden</h1><p>คุณไม่มีสิทธิ์เข้าถึงหน้านี้</p></div>;
+
+const RoleRedirect = () => {
+  const { role, loading } = useAuth();
+  if (loading) return null;
+
+  if (role === 'admin') return <Navigate to="/dashboard" replace />;
+  if (role === 'activity_maker') return <Navigate to="/activity-board" replace />;
+  
+  return <Navigate to="/calendar" replace />;
+};
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* หน้า login ไม่ต้องมี Sidebar */}
           <Route path="/login" element={<Login />} />
+          <Route path="/403" element={<Forbidden />} />
 
-          {/* ส่วนที่มี Sidebar */}
-          <Route element={<AppShell />}>
-            {/* redirect ตาม role */}
-            <Route path="/" element={<RoleRedirect />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <SidebarLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<RoleRedirect />} />
 
-            {/* admin */}
             <Route
-              path="/dashboard"
+              path="dashboard"
               element={
                 <ProtectedRoute roles={['admin']}>
                   <Dashboard />
@@ -48,7 +53,7 @@ function App() {
             />
             
             <Route
-              path="/admin/requests"
+              path="admin-requests"
               element={
                 <ProtectedRoute roles={['admin']}>
                   <AdminRequests />
@@ -56,49 +61,14 @@ function App() {
               }
             />
 
-            {/* calendar: เปิดให้ทุกคนเข้าได้ */}
-            <Route
-              path="/calendar"
-              element={
-                <ProtectedRoute roles={['guest', 'student', 'activity_maker', 'admin']}>
-                  <CalendarPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* activity board: เปิดให้ทุกคนเข้าได้ */}
-            <Route
-              path="/activity-board"
-              element={
-                <ProtectedRoute roles={['guest', 'student', 'activity_maker', 'admin']}>
-                  <ActivityBoard />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* settings: เปิดให้ทุกคนเข้าได้ (มี logic แยกข้างใน) */}
-            <Route
-              path="/settings"
-              element={
-                <ProtectedRoute roles={['guest', 'student', 'activity_maker', 'admin']}>
-                  <Settings />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* profile */}
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute roles={['admin', 'student', 'guest', 'activity_maker']}>
-                  <ProfilePage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* หน้า Forbidden */}
-            <Route path="/403" element={<Forbidden />} />
+            <Route path="activity-board" element={<ActivityBoard />} />
+            <Route path="calendar" element={<CalendarPage />} /> 
+            <Route path="settings" element={<Settings />} />
+            <Route path="profile" element={<ProfilePage />} /> {/* ✅ Route นี้มีอยู่แล้ว ใช้งานได้เลย */}
+            
           </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
