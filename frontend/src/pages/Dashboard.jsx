@@ -1,12 +1,3 @@
-<<<<<<< Updated upstream
-export default function Dashboard() {
-  return (
-    <section className="page">
-      <h1 className="page-title">Dashboard</h1>
-      <p>ยินดีต้อนรับเข้าสู่ระบบ 🙌</p>
-    </section>
-=======
-// frontend/src/pages/Dashboard.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Card, List, Tag, message, Statistic, Row, Col, Empty } from "antd";
 import { CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
@@ -67,7 +58,7 @@ export default function Dashboard() {
 
   const todayEvents = useMemo(
     () => events.filter((e) => dayjs(e.start).isBetween(startOfToday, endOfToday, null, "[]")),
-    [events]
+    [events, startOfToday, endOfToday]
   );
 
   const upcoming7 = useMemo(
@@ -76,10 +67,10 @@ export default function Dashboard() {
         .filter((e) => dayjs(e.start).isAfter(endOfToday))
         .filter((e) => dayjs(e.start).isBefore(now.add(7, "day")))
         .slice(0, 8),
-    [events]
+    [events, endOfToday, now]
   );
 
-  const overdue = useMemo(() => events.filter((e) => dayjs(e.end).isBefore(now)), [events]);
+  const overdue = useMemo(() => events.filter((e) => dayjs(e.end).isBefore(now)), [events, now]);
 
   const kpi = useMemo(() => {
     const thisWeek = events.filter(
@@ -94,7 +85,7 @@ export default function Dashboard() {
       return acc + (diff > 0 ? diff : 0);
     }, 0);
     return { thisWeek, total, todayCount, hoursToday: Number(hoursToday.toFixed(1)) };
-  }, [events, todayEvents]);
+  }, [events, todayEvents, endOfWeek, now]);
 
   const renderItem = (item) => (
     <List.Item>
@@ -179,6 +170,5 @@ export default function Dashboard() {
         </Col>
       </Row>
     </div>
->>>>>>> Stashed changes
   );
 }

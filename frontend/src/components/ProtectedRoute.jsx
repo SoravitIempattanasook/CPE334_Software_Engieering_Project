@@ -1,30 +1,24 @@
-import { Navigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-export const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute = ({ children, roles = [] }) => {
+  const { user, role, loading } = useAuth();
 
-  // ระหว่างกำลังโหลด session → แสดง Loading UI (กันหน้าขาว)
-  if (loading) {
-    return (
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        fontSize: "20px",
-        color: "#777"
-      }}>
-        Loading...
-      </div>
-    );
-  }
+  // ระหว่างโหลดข้อมูล User ให้แสดงข้อความ Loading หรือหน้าว่างๆ ไปก่อน
+  if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
 
-  // โหลดเสร็จแล้วแต่ไม่มี user → เด้งไป login
+  // ถ้ายังไม่ Login ให้ดีดกลับไปหน้า Login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // มี user แล้ว → แสดงหน้าได้ปกติ
+  // ถ้ามีการระบุ roles และ role ปัจจุบันของผู้ใช้ไม่อยู่ในรายการที่อนุญาต
+  // ให้ดีดไปหน้า 403 (Forbidden)
+  if (roles.length > 0 && !roles.includes(role)) {
+    return <Navigate to="/403" replace />;
+  }
+
   return children;
 };
+
+export default ProtectedRoute;
