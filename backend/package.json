@@ -7,8 +7,11 @@
   },
   "dependencies": {
     "@elysiajs/cors": "^1.0.2",
+    "@elysiajs/cron": "^1.4.1",
     "@elysiajs/jwt": "^1.0.2",
-    "elysia": "latest"
+    "@supabase/supabase-js": "^2.84.0",
+    "elysia": "latest",
+    "resend": "^6.5.2"
   },
   "devDependencies": {
     "bun-types": "latest"
