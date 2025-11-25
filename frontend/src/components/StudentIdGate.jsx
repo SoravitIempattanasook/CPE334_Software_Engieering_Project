@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
  * Modal บังคับกรอกรหัสนักศึกษา (11 หลัก)
  * - โผล่เมื่อ user.user_metadata.student_id ไม่มี
  * - ปิดไม่ได้จนกว่าจะบันทึก หรือกด Logout
- * - มีปุ่ม "ไม่ใช่นักศึกษา" เพื่อข้ามการกรอกใน Session นี้
+ * - มีปุ่ม "ไม่ใช่นักศึกษา" เพื่อข้ามการกรอก (จำค่าตลอดไปใน Browser นี้)
  */
 export default function StudentIdGate({ children }) {
   const { loading } = useAuth(); 
@@ -23,8 +23,8 @@ export default function StudentIdGate({ children }) {
       // ถ้า AuthContext ยังโหลดไม่เสร็จ ให้รอไปก่อน
       if (loading) return;
 
-      // 1. เช็คว่าเคยกดข้าม (Skip) ใน Session นี้หรือยัง
-      const isSkipped = sessionStorage.getItem("skipStudentIdGate");
+      // 1. เช็คว่าเคยกดข้าม (Skip) ในเครื่องนี้หรือยัง (เปลี่ยนจาก SessionStorage เป็น LocalStorage)
+      const isSkipped = localStorage.getItem("skipStudentIdGate");
       if (isSkipped) {
         if (active) setOpen(false);
         return;
@@ -103,8 +103,8 @@ export default function StudentIdGate({ children }) {
   };
 
   const handleSkip = () => {
-    // บันทึกการข้ามลง SessionStorage (จะหายไปเมื่อปิด Browser)
-    sessionStorage.setItem("skipStudentIdGate", "1");
+    // บันทึกการข้ามลง LocalStorage (จำค่าตลอดไปแม้ปิด Browser)
+    localStorage.setItem("skipStudentIdGate", "1");
     setOpen(false);
   };
 
@@ -116,6 +116,7 @@ export default function StudentIdGate({ children }) {
       {/* Modal Overlay */}
       <div style={backdrop}>
         <div style={modal} role="dialog" aria-modal="true" aria-labelledby="sid-title">
+          {/* แก้ไขบรรทัดนี้ครับ ลบ xj ออก */}
           <h2 id="sid-title" style={{ margin: 0, fontSize: 24, color: '#333' }}>กรอกรหัสนักศึกษา</h2>
           <p style={{ marginTop: 8, color: "#666" }}>
             เพื่อความถูกต้องของข้อมูล โปรดระบุรหัสนักศึกษาก่อนเริ่มใช้งานระบบ
